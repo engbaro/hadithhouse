@@ -38,24 +38,21 @@ module HadithHouse.Controllers {
   import Person = HadithHouse.Resources.Person;
   import ObjectWithPromise = HadithHouse.Resources.ObjectWithPromise;
 
-  export class EntityListingPageCtrl<TEntity extends Entity> {
+  export class EntityListingPageCtrl<TEntity extends Entity<number>> {
     pagedEntities:ObjectWithPromise<PagedResults<TEntity>>;
     searchQuery:string;
     searchPromise:IPromise<void> = null;
     page:number = 1;
     pageSize:number = 10;
 
-    constructor(private $scope:ng.IScope,
-                private $rootScope:ng.IScope,
-                private $timeout:ng.ITimeoutService,
-                private $location:ng.ILocationService,
-                private $mdDialog:ng.material.IDialogService,
-                private EntityResource:Resources.CacheableResource<TEntity>,
-                private ToastService:any) {
-      let urlParams = $location.search();
-      this.page = parseInt(urlParams['page']) || 1;
-      this.searchQuery = urlParams['search'] || '';
-
+    constructor(protected $scope:ng.IScope,
+                protected $rootScope:ng.IScope,
+                protected $timeout:ng.ITimeoutService,
+                protected $location:ng.ILocationService,
+                protected $mdDialog:ng.material.IDialogService,
+                protected EntityResource:Resources.CacheableResource<TEntity, number>,
+                protected ToastService:any) {
+      this.readUrlParams();
       this.loadEntities();
 
       $scope.$watch(() => this.searchQuery, (newValue, oldValue) => {
@@ -78,21 +75,14 @@ module HadithHouse.Controllers {
         this.loadEntities();
       });
     }
-
-    private loadEntities() {
-      // TODO: Show an alert if an error happens.
-      if (!this.searchQuery) {
-        this.pagedEntities = this.EntityResource.pagedQuery({
-          limit: this.pageSize,
-          offset: (this.page - 1) * this.pageSize
-        });
-      } else {
-        this.pagedEntities = this.EntityResource.pagedQuery({
-          search: this.searchQuery,
-          limit: this.pageSize,
-          offset: (this.page - 1) * this.pageSize
-        });
-      }
+    
+    protected readUrlParams() {
+      let urlParams = this.$location.search();
+      this.page = parseInt(urlParams['page']) || 1;
+      this.searchQuery = urlParams['search'] || '';
+    }
+    
+    protected updateUrlParams() {
       if (typeof(this.page) === 'number' && this.page > 1) {
         this.$location.search('page', this.page);
       } else {
@@ -103,6 +93,27 @@ module HadithHouse.Controllers {
       } else {
         this.$location.search('search', null);
       }
+    }
+
+    protected getQueryParams():{} {
+      if (!this.searchQuery) {
+        return {
+          limit: this.pageSize,
+          offset: (this.page - 1) * this.pageSize
+        };
+      } else {
+        return {
+          search: this.searchQuery,
+          limit: this.pageSize,
+          offset: (this.page - 1) * this.pageSize
+        };
+      }
+    }
+    
+    protected loadEntities() {
+      // TODO: Show an alert if an error happens.
+      this.pagedEntities = this.EntityResource.pagedQuery(this.getQueryParams());
+      this.updateUrlParams();
     }
 
     public deleteEntity = (event:any, entity:TEntity) => {

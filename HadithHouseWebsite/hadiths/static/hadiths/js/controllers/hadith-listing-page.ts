@@ -31,14 +31,50 @@
     import Hadith = HadithHouse.Resources.Hadith;
 
     export class HadithListingPageCtrl extends EntityListingPageCtrl<Hadith> {
+      tagsFilter:number[];
       constructor($scope:ng.IScope,
                   $rootScope:ng.IScope,
                   $timeout:ng.ITimeoutService,
                   $location:ng.ILocationService,
                   $mdDialog:ng.material.IDialogService,
-                  private HadithResource:Resources.CacheableResource<Hadith>,
+                  private HadithResource:Resources.CacheableResource<Hadith, number>,
                   ToastService:any) {
         super($scope, $rootScope, $timeout, $location, $mdDialog, HadithResource, ToastService);
+
+        $scope.$watch(() => this.tagsFilter, (newValue, oldValue) => {
+          this.loadEntities();
+        });
+      }
+
+      protected readUrlParams() {
+        super.readUrlParams();
+        let urlParams = this.$location.search();
+        try {
+          this.tagsFilter = urlParams['tags'].split(',').map((t) => parseInt(t));
+        } catch (e) {
+          this.tagsFilter = [];
+        }
+      }
+
+      protected updateUrlParams() {
+        super.updateUrlParams();
+        if (this.tagsFilter && this.tagsFilter.length > 0) {
+          this.$location.search('tags', this.tagsFilter.join(','));
+        } else {
+          this.$location.search('tags', null);
+        }
+      }
+
+      protected getQueryParams():{} {
+        var queryParams = super.getQueryParams();
+        if (this.tagsFilter && this.tagsFilter.length > 0) {
+          queryParams['tags'] = this.tagsFilter.join(',');
+        }
+        return queryParams;
+      }
+
+      protected onHadithTagClicked(hadithTag) {
+        this.tagsFilter = [hadithTag.id];
       }
     }
 

@@ -70,9 +70,7 @@ var HadithHouse;
                         });
                     });
                 };
-                var urlParams = $location.search();
-                this.page = parseInt(urlParams['page']) || 1;
-                this.searchQuery = urlParams['search'] || '';
+                this.readUrlParams();
                 this.loadEntities();
                 $scope.$watch(function () { return _this.searchQuery; }, function (newValue, oldValue) {
                     if (newValue == oldValue) {
@@ -93,21 +91,12 @@ var HadithHouse;
                     _this.loadEntities();
                 });
             }
-            EntityListingPageCtrl.prototype.loadEntities = function () {
-                // TODO: Show an alert if an error happens.
-                if (!this.searchQuery) {
-                    this.pagedEntities = this.EntityResource.pagedQuery({
-                        limit: this.pageSize,
-                        offset: (this.page - 1) * this.pageSize
-                    });
-                }
-                else {
-                    this.pagedEntities = this.EntityResource.pagedQuery({
-                        search: this.searchQuery,
-                        limit: this.pageSize,
-                        offset: (this.page - 1) * this.pageSize
-                    });
-                }
+            EntityListingPageCtrl.prototype.readUrlParams = function () {
+                var urlParams = this.$location.search();
+                this.page = parseInt(urlParams['page']) || 1;
+                this.searchQuery = urlParams['search'] || '';
+            };
+            EntityListingPageCtrl.prototype.updateUrlParams = function () {
                 if (typeof (this.page) === 'number' && this.page > 1) {
                     this.$location.search('page', this.page);
                 }
@@ -120,6 +109,26 @@ var HadithHouse;
                 else {
                     this.$location.search('search', null);
                 }
+            };
+            EntityListingPageCtrl.prototype.getQueryParams = function () {
+                if (!this.searchQuery) {
+                    return {
+                        limit: this.pageSize,
+                        offset: (this.page - 1) * this.pageSize
+                    };
+                }
+                else {
+                    return {
+                        search: this.searchQuery,
+                        limit: this.pageSize,
+                        offset: (this.page - 1) * this.pageSize
+                    };
+                }
+            };
+            EntityListingPageCtrl.prototype.loadEntities = function () {
+                // TODO: Show an alert if an error happens.
+                this.pagedEntities = this.EntityResource.pagedQuery(this.getQueryParams());
+                this.updateUrlParams();
             };
             EntityListingPageCtrl.prototype.range = function (n) {
                 var res = [];
