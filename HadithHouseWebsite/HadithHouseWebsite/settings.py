@@ -10,8 +10,12 @@ https://docs.djangoproject.com/en/1.7/ref/settings/
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
+import socket
 
-from HadithHouseWebsite.server_settings import get_db_settings, get_debug, get_allowed_hosts, get_log_dir
+import sys
+
+from HadithHouseWebsite.server_settings import get_db_settings, get_debug, get_allowed_hosts, \
+  get_log_dir
 
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 
@@ -26,6 +30,24 @@ DEBUG = get_debug()
 DJANGO_LOG_LEVEL = DEBUG
 
 ALLOWED_HOSTS = get_allowed_hosts()
+
+PRODUCTION_HOSTS = (
+  'www.hadithhouse.net',
+)
+
+DEVELOPMENT_HOSTS = (
+  'www.hadithhouse-dev.net',
+)
+
+def get_environment():
+  host = socket.getfqdn().lower()
+
+  if host in PRODUCTION_HOSTS:
+    return 'production'
+  elif host in DEVELOPMENT_HOSTS:
+    return 'development'
+  else:
+    return 'local'
 
 SERVER_EMAIL = 'noreply@hadithhouse.net'
 
@@ -65,7 +87,15 @@ ADMINS = (
 # Database
 # https://docs.djangoproject.com/en/1.7/ref/settings/#databases
 # This
-DATABASES = get_db_settings()
+if 'test' in sys.argv:
+  DATABASES = {
+    'default': {
+      'ENGINE': 'django.db.backends.sqlite3',
+      'NAME': os.path.join(BASE_DIR, 'HadithHouse'),
+    }
+  }
+else:
+  DATABASES = get_db_settings()
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.7/topics/i18n/
@@ -127,7 +157,7 @@ LOGGING = {
       'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
     },
     'simple': {
-      'format': '%(levelname)s %(message)s'
+      'format': '%(levelname)s %(asctime)s %(message)s'
     },
   },
   'filters': {
@@ -138,18 +168,36 @@ LOGGING = {
   'handlers': {
     'django_log_file': {
       'level': 'DEBUG',
-      'class': 'logging.FileHandler',
-      'filename': os.path.join(get_log_dir(), 'django.log')
+      'class': 'logging.handlers.TimedRotatingFileHandler',
+      'filename': os.path.join(get_log_dir(), 'django.log'),
+      'when': 'D',
+      'interval': 1,
+      'backupCount': 30,
+      'utc': True,
+      'formatter': 'simple',
+      'encoding': 'utf-8'
     },
     'django_requests_log_file': {
       'level': 'DEBUG',
-      'class': 'logging.FileHandler',
-      'filename': os.path.join(get_log_dir(), 'django.request.log')
+      'class': 'logging.handlers.TimedRotatingFileHandler',
+      'filename': os.path.join(get_log_dir(), 'django.request.log'),
+      'when': 'D',
+      'interval': 1,
+      'backupCount': 30,
+      'utc': True,
+      'formatter': 'simple',
+      'encoding': 'utf-8'
     },
     'django_db_backends_log_file': {
       'level': 'DEBUG',
-      'class': 'logging.FileHandler',
-      'filename': os.path.join(get_log_dir(), 'django.db.backends.log')
+      'class': 'logging.handlers.TimedRotatingFileHandler',
+      'filename': os.path.join(get_log_dir(), 'django.db.backends.log'),
+      'when': 'D',
+      'interval': 1,
+      'backupCount': 30,
+      'utc': True,
+      'formatter': 'simple',
+      'encoding': 'utf-8'
     },
     'mail_admins': {
       'level': 'ERROR',
@@ -162,7 +210,7 @@ LOGGING = {
       'propagate': True,
     },
     'django.request': {
-      'handlers': ['django_requests_log_file'],
+      'handlers': ['django_requests_log_file', 'mail_admins'],
       'level': 'ERROR',
       'propagate': False,
     },

@@ -1,10 +1,8 @@
-import re
-
-import sys
 from django.contrib.auth.models import User
 from django.db import models
 from django.db.models.signals import pre_save
 from django.dispatch import receiver
+from textprocessing.arabic import simplify_arabic_text
 
 # NOTE: Django automatically index foreign keys, but we still add db_index=True
 # to make it clear to the reader.
@@ -17,7 +15,6 @@ from django.dispatch import receiver
 # because I don't think they will be frequently used for filtering.
 
 # TODO: Do we need to index added_on and updated_on?
-from django.utils.datetime_safe import datetime
 
 
 class Person(models.Model):
@@ -71,6 +68,63 @@ class Book(models.Model):
     return self.title[:50] + '...' if len(self.title) > 50 else self.title
 
 
+class BookVolume(models.Model):
+  class Meta:
+    db_table = 'bookvolumes'
+    default_permissions = ('add', 'change', 'delete')
+
+  title = models.CharField(max_length=128)
+  simple_title = models.CharField(max_length=128)
+  number = models.SmallIntegerField()
+  book = models.ForeignKey(Book, null=True, blank=True, related_name='volumes', db_index=True, on_delete=models.CASCADE)
+  added_on = models.DateTimeField(auto_now_add=True)
+  updated_on = models.DateTimeField(auto_now=True)
+  added_by = models.ForeignKey(User, db_index=True, on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name='bookvolumes_added')
+  updated_by = models.ForeignKey(User, db_index=True, on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name='+')
+
+
+class BookChapter(models.Model):
+  class Meta:
+    db_table = 'bookchapters'
+    default_permissions = ('add', 'change', 'delete')
+
+  title = models.CharField(max_length=128)
+  simple_title = models.CharField(max_length=128)
+  number = models.SmallIntegerField()
+  book = models.ForeignKey(Book, null=True, blank=True, related_name='chapters', db_index=True,
+                           on_delete=models.CASCADE)
+  volume = models.ForeignKey(BookVolume, null=True, blank=True, related_name='chapters', db_index=True,
+                             on_delete=models.CASCADE)
+  added_on = models.DateTimeField(auto_now_add=True)
+  updated_on = models.DateTimeField(auto_now=True)
+  added_by = models.ForeignKey(User, db_index=True, on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name='bookchapters_added')
+  updated_by = models.ForeignKey(User, db_index=True, on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name='+')
+
+
+class BookSection(models.Model):
+  class Meta:
+    db_table = 'booksections'
+    default_permissions = ('add', 'change', 'delete')
+
+  title = models.CharField(max_length=128)
+  simple_title = models.CharField(max_length=128)
+  number = models.SmallIntegerField()
+  book = models.ForeignKey(Book, null=True, blank=True, related_name='sections', db_index=True,
+                           on_delete=models.CASCADE)
+  chapter = models.ForeignKey(BookChapter, null=True, blank=True, related_name='sections', db_index=True,
+                              on_delete=models.CASCADE)
+  added_on = models.DateTimeField(auto_now_add=True)
+  updated_on = models.DateTimeField(auto_now=True)
+  added_by = models.ForeignKey(User, db_index=True, on_delete=models.SET_NULL,
+                               null=True, blank=True, related_name='booksections_added')
+  updated_by = models.ForeignKey(User, db_index=True, on_delete=models.SET_NULL,
+                                 null=True, blank=True, related_name='+')
+
+
 class HadithTag(models.Model):
   class Meta:
     db_table = 'hadithtags'
@@ -102,7 +156,15 @@ class Hadith(models.Model):
   simple_text = models.TextField(db_index=True, default='')
   person = models.ForeignKey(Person, null=True, blank=True, related_name='hadiths', db_index=True,
                              on_delete=models.PROTECT)
-  book = models.ForeignKey(Book, null=True, blank=True, related_name='hadiths', db_index=True, on_delete=models.PROTECT)
+  book = models.ForeignKey(Book, null=True, blank=True, related_name='hadiths', db_index=True,
+                           on_delete=models.PROTECT)
+  volume = models.ForeignKey(BookVolume, null=True, blank=True, related_name='hadiths', db_index=True,
+                             on_delete=models.PROTECT)
+  chapter = models.ForeignKey(BookChapter, null=True, blank=True, related_name='hadiths', db_index=True,
+                              on_delete=models.PROTECT)
+  section = models.ForeignKey(BookSection, null=True, blank=True, related_name='hadiths', db_index=True,
+                              on_delete=models.PROTECT)
+  number = models.SmallIntegerField(null=True, blank=True, db_index=True)
   # TODO: Do we need to index added_on and updated_on?
   added_on = models.DateTimeField(auto_now_add=True)
   updated_on = models.DateTimeField(auto_now=True)
@@ -164,24 +226,6 @@ class FbUser(models.Model):
   user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='fb_user')
 
 
-def remove_arabic_diactrictics(input):
-  if input is None:
-    return None
-  return re.sub(u'[\u064B-\u0652]', '', input, flags=re.MULTILINE)
-
-
-def unify_alif_letters(input):
-  if input is None:
-    return None
-  return re.sub(u'[\u0622\u0623\u0625]', u'\u0627', input, flags=re.MULTILINE)
-
-
-def simplify_arabic_text(input):
-  if input is None:
-    return None
-  return unify_alif_letters(remove_arabic_diactrictics(input))
-
-
 @receiver(pre_save, sender=Person)
 def person_pre_save(sender, instance, *args, **kwargs):
   instance.simple_display_name = simplify_arabic_text(instance.display_name)
@@ -193,6 +237,21 @@ def person_pre_save(sender, instance, *args, **kwargs):
 def book_pre_save(sender, instance, *args, **kwargs):
   instance.simple_title = simplify_arabic_text(instance.title)
   instance.simple_brief_desc = simplify_arabic_text(instance.brief_desc)
+
+
+@receiver(pre_save, sender=BookVolume)
+def bookvolume_pre_save(sender, instance, *args, **kwargs):
+  instance.simple_title = simplify_arabic_text(instance.title)
+
+
+@receiver(pre_save, sender=BookChapter)
+def bookchapter_pre_save(sender, instance, *args, **kwargs):
+  instance.simple_title = simplify_arabic_text(instance.title)
+
+
+@receiver(pre_save, sender=BookSection)
+def booksection_pre_save(sender, instance, *args, **kwargs):
+  instance.simple_title = simplify_arabic_text(instance.title)
 
 
 @receiver(pre_save, sender=HadithTag)
